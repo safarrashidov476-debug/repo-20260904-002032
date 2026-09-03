@@ -1,0 +1,83 @@
+name: Yangi fork yaratish va tuzatishlarni qo'llash
+
+on:
+  workflow_dispatch:
+    inputs:
+      new_repo_name:
+        description: "Yangi repo (fork) nomi"
+        required: true
+        default: "Accessibility-Gram"
+
+permissions:
+  contents: read
+
+jobs:
+  fork-and-setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Joriy repo'ni checkout qilish (tuzatish fayllarini olish uchun)
+        uses: actions/checkout@v4
+        with:
+          path: source-files
+
+      - name: GitHub CLI orqali kirish
+        env:
+          GH_TOKEN: ${{ secrets.FORK_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN" || {
+            echo "XATO: FORK_TOKEN secret'i sozlanmagan."
+            exit 1
+          }
+          gh auth status
+
+      - name: DrKLO/Telegram'ni fork qilish
+        env:
+          GH_TOKEN: ${{ secrets.FORK_TOKEN }}
+          NEW_REPO_NAME: ${{ inputs.new_repo_name }}
+        run: |
+          set -euo pipefail
+          gh repo fork DrKLO/Telegram --fork-name "$NEW_REPO_NAME" --clone=false --remote=false
+          echo "Fork tayyor bo'lishini kutyapmiz..."
+          sleep 20
+
+      - name: Yangi fork'ni klonlash
+        env:
+          GH_TOKEN: ${{ secrets.FORK_TOKEN }}
+          NEW_REPO_NAME: ${{ inputs.new_repo_name }}
+        run: |
+          set -euo pipefail
+          FORK_OWNER=$(gh api user --jq .login)
+          echo "FORK_OWNER=$FORK_OWNER" >> "$GITHUB_ENV"
+          gh repo clone "$FORK_OWNER/$NEW_REPO_NAME" new-fork -- --depth=1
+
+      - name: Skriptlar, assetlar va workflow'larni yangi fork'ga ko'chirish
+        run: |
+          set -euo pipefail
+          mkdir -p new-fork/scripts new-fork/assets new-fork/.github/workflows
+          cp source-files/scripts/*.py new-fork/scripts/
+          cp -R source-files/assets/. new-fork/assets/
+          cp source-files/.github/workflows/build-apk.yml new-fork/.github/workflows/
+          cp source-files/.github/workflows/patch-apk.yml new-fork/.github/workflows/
+          cp source-files/.github/workflows/sync-from-zip.yml new-fork/.github/workflows/
+          cp source-files/README.md source-files/OQING.txt source-files/ANALYSIS_BUILD3.md new-fork/
+          rm -f new-fork/release.keystore new-fork/release.keystore.password
+
+      - name: O'zgarishlarni yangi fork'ga yuborish
+        run: |
+          set -euo pipefail
+          cd new-fork
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "O'zgarish yo'q — commit qilinmadi."
+          else
+            git commit -m "Tiflogram patch workflow'larini qo'shish"
+            git push origin HEAD
+          fi
+
+      - name: Natija
+        run: |
+          echo "✅ Yangi fork tayyor: https://github.com/${{ env.FORK_OWNER }}/${{ inputs.new_repo_name }}"
+          echo "Endi o'sha repo'ning Actions bo'limida build-apk workflow'ini ishga tushiring."

@@ -1,0 +1,20 @@
+# Signing material — configure these as GitHub Secrets instead.
+release.keystore
+release.keystore.password
+*.jks
+*.keystore
+
+# Android/Gradle build output.
+.gradle/
+.idea/
+**/build/
+*.apk
+*.aab
+
+# Python cache.
+__pycache__/
+*.py[cod]
+
+# Local working directories.
+telegram-src/
+new-fork/
